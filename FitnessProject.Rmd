@@ -1,0 +1,113 @@
+---
+title: "Practical Machine Learning Course Project"
+author: SLaw7
+output: 
+html_document:
+keep_md: true
+---
+  
+##  Data overview
+
+The data for this project come from this source: http://groupware.les.inf.puc-rio.br/har.
+
+We will use the data of 6 participants who were asked to perform barbell lifts correctly and incorrectly in 5 different ways. The data is from accelerometers on the belt, forearm, arm, and dumbell.
+
+The goal of this project is to correctly predict the manner in which a participant did the exercise.
+
+#### Getting Data
+
+```{r load_data}
+# Download the data
+trainUrl <- "https://d396qusza40orc.cloudfront.net/predmachlearn/pml-training.csv"
+testUrl <- "https://d396qusza40orc.cloudfront.net/predmachlearn/pml-testing.csv"
+#download.file(trainUrl, destfile = "./data/training.csv")
+#download.file(testUrl, destfile = "./data/testing.csv")
+
+# Read the data
+training <- read.csv("./data/training.csv", na.strings=c("NA","#DIV/0!",""))
+testing <- read.csv("./data/testing.csv", na.strings=c("NA","#DIV/0!",""))
+```
+
+Notice, that many of the entries of the original data were empty, so I had to set those cells to "NA" using the "na.strings" option.
+
+#### Cleaning data
+
+Since many of the columns are mostly "NA", I will remove those columns from the data set. First, I created a list of the number of "NA" entries in each column. Then, I redefined my data set to only contain the columns without any "NA" entries.
+
+```{r clean_data1}
+# List of the number of "NA" entries in each column
+list <- vector()
+for (i in 1:ncol(training)){
+    x <- sum(is.na(training[,i]))
+    list <- c(list, x)
+}
+# Remove columns with "NA"
+training<-training[,list==0]
+```
+
+I don't want my prediction model to be influenced by the time or window or the exercise, so I removed the columns pertaining to the user name, timestamp, and window.
+
+```{r clean_data2}
+training<-training[,-(1:7)]
+```
+
+## Prediction Model
+
+I am choosing to use the random forest model. 
+
+#### Cross Validation
+
+According to Breiman's information on random forests:
+
+"In random forests, there is no need for cross-validation or a separate test set to get an unbiased estimate of the test set error. It is estimated internally, during the run..."
+
+(https://www.stat.berkeley.edu/~breiman/RandomForests/cc_home.htm)
+
+#### Model
+
+First I will partition my training data. According to the course discussion forums, I should be able to get a fairly good model using only 1/3 of the data. This will shorten my computation times.
+
+```{r traingin_train}
+library(caret)
+set.seed(314)
+# Create training set
+inTrain = createDataPartition(training$classe, p = 1/3)[[1]]
+training_train = training[inTrain,]
+training_test = training[-inTrain,]
+```
+
+Next I will create my model using the random forest method.
+
+```{r model}
+modFit <- train(classe~., data=training_train, method="rf", prox=TRUE)
+```
+
+#### Out of Sample Error
+
+Let's consider the error rate this model gets on a new data set.
+
+```{r oos_error}
+predictions <- predict(modFit, newdata=training_test)
+print(confusionMatrix(predictions, training_test$classe), digits=4)
+```
+
+We see that the accuracy is 0.9837, so we expect the out of sample error to be 1-0.9837, that is 1.63%.
+
+Also note that Kappa is 0.9794, so we can expect that this is an excellent model.
+
+Now, we compare our estimate to the error rate given here:
+
+```{r oob_error}
+modFit$finalModel
+```
+
+We see the Out of Bounds estimate of error rate is 1.74%, very close to our estimate.
+
+## Conclusion
+
+To conclude we will make predictions for the given test data set.
+
+```{r prediction}
+print(predict(modFit, newdata=testing))
+```
+
